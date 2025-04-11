@@ -1,0 +1,47 @@
+Feature: Coordinate-Based Form Automation using OCR # features/login.feature:19
+
+  Scenario: Successful login using coordinates detected by OCR                                                 # features/login.feature:21
+    Given I navigate to "https://hab.instarresearch.com/wix/56789/p159939540878.aspx?QClink=1" and perform OCR # features/steps/login_steps.py:24
+    When I enter "1" using label "BG_Target"                                                                   # features/steps/login_steps.py:57
+    And I enter "1" using label "BG_DSE_Segment_Code"                                                          # features/steps/login_steps.py:57
+    And I click using label "Next"                                                                             # features/steps/login_steps.py:85
+    And I wait for 10 seconds                                                                                  # features/steps/login_steps.py:141
+    And I see the label "QID: TargetH"                                                                         # features/steps/login_steps.py:146
+      Traceback (most recent call last):
+        File "C:\Healing_BDD_OCR\venv\Lib\site-packages\behave\model.py", line 1329, in run
+          match.run(runner.context)
+          ~~~~~~~~~^^^^^^^^^^^^^^^^
+        File "C:\Healing_BDD_OCR\venv\Lib\site-packages\behave\matchers.py", line 98, in run
+          self.func(context, *args, **kwargs)
+          ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "features\steps\login_steps.py", line 149, in step_impl
+          ocr_results = load_coordinates_csv(context.custom_config)
+                                             ^^^^^^^^^^^^^^^^^^^^^
+        File "C:\Healing_BDD_OCR\venv\Lib\site-packages\behave\runner.py", line 321, in __getattr__
+          raise AttributeError(msg)
+      AttributeError: 'Context' object has no attribute 'custom_config'
+      
+      Captured logging:
+      INFO:builtins:Navigating to: https://hab.instarresearch.com/wix/56789/p159939540878.aspx?QClink=1
+      INFO:builtins:Navigation complete. Performing initial OCR scan...
+      INFO:automation_ocr_utils:Screenshot saved: C:\Healing_BDD_OCR\screenshots\initial_scan_20250411_192753.png
+      WARNING:easyocr.easyocr:Using CPU. Note: This module is much faster with a GPU.
+      INFO:automation_ocr_utils:EasyOCR Reader initialized (GPU: False)
+      INFO:automation_ocr_utils:OCR run complete. Found 22 total results from engine(s): 'combined'.
+      INFO:automation_ocr_utils:Runtime OCR coordinates saved to: C:\Healing_BDD_OCR\detected_coordinates.csv
+      INFO:builtins:Attempting to enter value into field labeled 'BG_Target'
+      INFO:automation_ocr_utils:Found best match for 'BG_Target': 'BG_Target' (Score: 1.00 >= Threshold: 0.60)
+      INFO:automation_ocr_utils:Filling element via coordinates: x=233, y=102
+      INFO:builtins:Successfully entered value for label 'BG_Target'.
+      INFO:builtins:Attempting to enter value into field labeled 'BG_DSE_Segment_Code'
+      INFO:automation_ocr_utils:Found best match for 'BG_DSE_Segment_Code': 'BG_DSE_Segment_Code' (Score: 1.00 >= Threshold: 0.60)
+      INFO:automation_ocr_utils:Filling element via coordinates: x=280, y=358
+      INFO:builtins:Successfully entered value for label 'BG_DSE_Segment_Code'.
+      INFO:builtins:Attempting to click element labeled 'Next'
+      INFO:automation_ocr_utils:Found best match for 'Next': 'Next' (Score: 1.00 >= Threshold: 0.60)
+      INFO:automation_ocr_utils:Clicking element via coordinates: x=612, y=595
+      INFO:builtins:Successfully clicked label 'Next'.
+      ERROR:behave:--- Step Failed: And I see the label "QID: TargetH" ---
+      INFO:automation_ocr_utils:Screenshot saved: C:\Healing_BDD_OCR\screenshots\FAILED_Successful login using coordinates detected by OCR_I_see_the_label__QID__TargetH__20250411_192824.png
+
+
