@@ -7,7 +7,7 @@ import time
 # Import helper functions
 # Assuming environment.py added 'src' to sys.path
 from automation_ocr_utils import (
-    save_screenshot, preprocess_image, run_ocr, save_coordinates_csv,
+    run_ocr_after_action, save_screenshot, preprocess_image, run_ocr, save_coordinates_csv,
     load_coordinates_csv, find_element_by_label,
     click_coordinates, fill_coordinates
 )
@@ -54,72 +54,72 @@ def step_navigate_and_ocr(context: 'Context', url: str):
         raise # Fail the step
 
 
-@when('I enter "{value}" using label "{target_label}"')
-def step_enter_text_by_label(context: 'Context', value: str, target_label: str):
-    """Finds element by label in last OCR results and fills using coordinates."""
-    page: 'Page' = context.page
-    config: 'ConfigParser' = context.config
-    logger.info(f"Attempting to enter value into field labeled '{target_label}'")
-    try:
-        # Load the latest OCR results
-        ocr_results = load_coordinates_csv(config)
-        if not ocr_results: raise Exception("No OCR results loaded from CSV to find label.")
+# @when('I enter "{value}" using label "{target_label}"')
+# def step_enter_text_by_label(context: 'Context', value: str, target_label: str):
+#     """Finds element by label in last OCR results and fills using coordinates."""
+#     page: 'Page' = context.page
+#     config: 'ConfigParser' = context.config
+#     logger.info(f"Attempting to enter value into field labeled '{target_label}'")
+#     try:
+#         # Load the latest OCR results
+#         ocr_results = load_coordinates_csv(config)
+#         if not ocr_results: raise Exception("No OCR results loaded from CSV to find label.")
 
-        # Find the element corresponding to the label
-        target_element = find_element_by_label(config, target_label, ocr_results)
-        if not target_element:
-            save_screenshot(page, config, f"LABEL_NOT_FOUND_{target_label}") # Save screenshot for debugging
-            raise Exception(f"Label '{target_label}' not found in OCR results with sufficient confidence.")
+#         # Find the element corresponding to the label
+#         target_element = find_element_by_label(config, target_label, ocr_results)
+#         if not target_element:
+#             save_screenshot(page, config, f"LABEL_NOT_FOUND_{target_label}") # Save screenshot for debugging
+#             raise Exception(f"Label '{target_label}' not found in OCR results with sufficient confidence.")
 
-        # Perform the fill action using the found coordinates
-        fill_coordinates(page, target_element, value)
-        logger.info(f"Successfully entered value for label '{target_label}'.")
-        # Optional: Screenshot after action
-        # save_screenshot(page, config, f"filled_{target_label}")
+#         # Perform the fill action using the found coordinates
+#         fill_coordinates(page, target_element, value)
+#         logger.info(f"Successfully entered value for label '{target_label}'.")
+#         # Optional: Screenshot after action
+#         # save_screenshot(page, config, f"filled_{target_label}")
 
-    except Exception as e:
-        logger.exception(f"Failed to enter '{value}' for label '{target_label}': {e}")
-        raise # Fail the step
+#     except Exception as e:
+#         logger.exception(f"Failed to enter '{value}' for label '{target_label}': {e}")
+#         raise # Fail the step
 
 
-@when('I click using label "{target_label}"')
-@step('I click using label "{target_label}"') # Allow using And/When etc.
-def step_click_by_label(context: 'Context', target_label: str):
-    """Finds element by label in last OCR results and clicks using coordinates."""
-    page: 'Page' = context.page
-    config: 'ConfigParser' = context.config
-    logger.info(f"Attempting to click element labeled '{target_label}'")
-    try:
-        # Load the latest OCR results
-        ocr_results = load_coordinates_csv(config)
-        if not ocr_results: raise Exception("No OCR results loaded from CSV to find label.")
+# @when('I click using label "{target_label}"')
+# @step('I click using label "{target_label}"') # Allow using And/When etc.
+# def step_click_by_label(context: 'Context', target_label: str):
+#     """Finds element by label in last OCR results and clicks using coordinates."""
+#     page: 'Page' = context.page
+#     config: 'ConfigParser' = context.config
+#     logger.info(f"Attempting to click element labeled '{target_label}'")
+#     try:
+#         # Load the latest OCR results
+#         ocr_results = load_coordinates_csv(config)
+#         if not ocr_results: raise Exception("No OCR results loaded from CSV to find label.")
 
-        # Find the element corresponding to the label
-        target_element = find_element_by_label(config, target_label, ocr_results)
-        if not target_element:
-            save_screenshot(page, config, f"LABEL_NOT_FOUND_{target_label}") # Save screenshot for debugging
-            raise Exception(f"Label '{target_label}' not found in OCR results with sufficient confidence.")
+#         # Find the element corresponding to the label
+#         target_element = find_element_by_label(config, target_label, ocr_results)
+#         if not target_element:
+#             save_screenshot(page, config, f"LABEL_NOT_FOUND_{target_label}") # Save screenshot for debugging
+#             raise Exception(f"Label '{target_label}' not found in OCR results with sufficient confidence.")
 
-        # Perform the click action using the found coordinates
-        click_coordinates(page, target_element)
-        logger.info(f"Successfully clicked label '{target_label}'.")
-        page.wait_for_load_state('networkidle', timeout=10000) # Wait for potential page change
-        # Optional: Screenshot after action
-        # save_screenshot(page, config, f"clicked_{target_label}")
+#         # Perform the click action using the found coordinates
+#         click_coordinates(page, target_element)
+#         logger.info(f"Successfully clicked label '{target_label}'.")
+#         page.wait_for_load_state('networkidle', timeout=10000) # Wait for potential page change
+#         # Optional: Screenshot after action
+#         # save_screenshot(page, config, f"clicked_{target_label}")
 
-        # --- Optional: Re-run OCR after click if state changes significantly ---
-        # logger.info("Performing OCR scan after click...")
-        # screenshot_path = save_screenshot(page, config, f"after_click_{target_label}")
-        # if screenshot_path:
-        #     processed_image = preprocess_image(config, screenshot_path)
-        #     if processed_image is not None:
-        #         ocr_results = run_ocr(config, processed_image)
-        #         save_coordinates_csv(config, ocr_results) # Update CSV
-        # --- End Optional Re-run OCR ---
+#         # --- Optional: Re-run OCR after click if state changes significantly ---
+#         # logger.info("Performing OCR scan after click...")
+#         # screenshot_path = save_screenshot(page, config, f"after_click_{target_label}")
+#         # if screenshot_path:
+#         #     processed_image = preprocess_image(config, screenshot_path)
+#         #     if processed_image is not None:
+#         #         ocr_results = run_ocr(config, processed_image)
+#         #         save_coordinates_csv(config, ocr_results) # Update CSV
+#         # --- End Optional Re-run OCR ---
 
-    except Exception as e:
-        logger.exception(f"Failed to click label '{target_label}': {e}")
-        raise # Fail the step
+#     except Exception as e:
+#         logger.exception(f"Failed to click label '{target_label}': {e}")
+#         raise # Fail the step
 
 
 @then('I see the page title as "{expected_title}"')
@@ -145,7 +145,118 @@ def step_wait_for_seconds(context: 'Context', seconds: int):
 
 @when(u'I see the label "{target_label}"')
 def step_impl(context, target_label):
-    """Checks if the specified label is found on the page using OCR results."""
-    ocr_results = load_coordinates_csv(context.custom_config)
-    found_element = find_element_by_label(context.custom_config, target_label, ocr_results)
+    config = context.config
+    ocr_results = load_coordinates_csv(config)
+    found_element = find_element_by_label(config, target_label, ocr_results)
     assert found_element is not None, f"Label '{target_label}' was not found on the page."
+
+# @when('I click using label "{target_label}" and perform OCR')
+# @step('I click using label "{target_label}" and perform OCR')
+# def step_click_by_label_and_ocr(context: 'Context', target_label: str):
+#     """Finds element by label in last OCR results, clicks using coordinates, and performs a new OCR scan."""
+#     page: 'Page' = context.page
+#     config = context.config
+#     logger.info(f"Attempting to click element labeled '{target_label}' and perform OCR")
+#     try:
+#         # Load the latest OCR results
+#         ocr_results = load_coordinates_csv(config)
+#         if not ocr_results:
+#             raise Exception("No OCR results loaded from CSV to find label.")
+
+#         # Find the element corresponding to the label
+#         target_element = find_element_by_label(config, target_label, ocr_results)
+#         if not target_element:
+#             save_screenshot(page, config, f"LABEL_NOT_FOUND_{target_label}")
+#             raise Exception(f"Label '{target_label}' not found in OCR results with sufficient confidence.")
+
+#         # Perform the click action using the found coordinates
+#         click_coordinates(page, target_element)
+#         logger.info(f"Successfully clicked label '{target_label}'.")
+
+#         # Perform OCR scan after click
+#         logger.info("Performing OCR scan after click...")
+#         run_ocr_after_action(page, config)
+#         logger.info("OCR scan completed after clicking '{target_label}'.")
+
+#     except Exception as e:
+#         logger.exception(f"Failed to click label '{target_label}' or perform OCR: {e}")
+#         raise
+
+@when('I enter "{value}" using label "{target_label}"')
+def step_enter_text_by_label(context: 'Context', value: str, target_label: str):
+    page: 'Page' = context.page
+    config = context.config
+    logger.info(f"Attempting to enter value into field labeled '{target_label}'")
+    try:
+        ocr_results = load_coordinates_csv(config)
+        if not ocr_results:
+            raise Exception("No OCR results loaded from CSV to find label.")
+        target_element = find_element_by_label(config, target_label, ocr_results)
+        if not target_element:
+            save_screenshot(page, config, f"LABEL_NOT_FOUND_{target_label}")
+            raise Exception(f"Label '{target_label}' not found in OCR results with sufficient confidence.")
+        fill_coordinates(page, target_element, value)
+        logger.info(f"Successfully entered value for label '{target_label}'.")
+    except Exception as e:
+        logger.exception(f"Failed to enter '{value}' for label '{target_label}': {e}")
+        raise
+
+@when('I click using label "{target_label}"')
+@step('I click using label "{target_label}"')
+def step_click_by_label(context: 'Context', target_label: str):
+    page: 'Page' = context.page
+    config = context.config
+    logger.info(f"Attempting to click element labeled '{target_label}'")
+    try:
+        ocr_results = load_coordinates_csv(config)
+        if not ocr_results:
+            raise Exception("No OCR results loaded from CSV to find label.")
+        target_element = find_element_by_label(config, target_label, ocr_results)
+        if not target_element:
+            save_screenshot(page, config, f"LABEL_NOT_FOUND_{target_label}")
+            raise Exception(f"Label '{target_label}' not found in OCR results with sufficient confidence.")
+        click_coordinates(page, target_element)
+        logger.info(f"Successfully clicked label '{target_label}'.")
+        page.wait_for_load_state('networkidle', timeout=10000)
+    except Exception as e:
+        logger.exception(f"Failed to click label '{target_label}': {e}")
+        raise
+
+@when('I click using label "{target_label}" and perform OCR')
+@step('I click using label "{target_label}" and perform OCR')
+def step_click_by_label_and_ocr(context: 'Context', target_label: str):
+    page: 'Page' = context.page
+    config = context.config
+    logger.info(f"Attempting to click element labeled '{target_label}' and perform OCR")
+    try:
+        ocr_results = load_coordinates_csv(config)
+        if not ocr_results:
+            raise Exception("No OCR results loaded from CSV to find label.")
+        target_element = find_element_by_label(config, target_label, ocr_results)
+        if not target_element:
+            save_screenshot(page, config, f"LABEL_NOT_FOUND_{target_label}")
+            raise Exception(f"Label '{target_label}' not found in OCR results with sufficient confidence.")
+        # Log bounding box
+        logger.info(f"Bounding box for '{target_label}': X={target_element['X']}, Y={target_element['Y']}, Width={target_element['Width']}, Height={target_element['Height']}")
+        # Log URL before click
+        pre_click_url = page.url
+        logger.info(f"Pre-click URL: {pre_click_url}")
+        click_coordinates(page, target_element)
+        logger.info(f"Successfully clicked label '{target_label}'.")
+        # Wait for page to load
+        logger.info("Waiting for page to load after click...")
+        try:
+            page.wait_for_load_state('networkidle', timeout=15000)
+            logger.info("Page load state reached: networkidle")
+        except Exception as e:
+            logger.warning(f"Page did not reach networkidle state: {e}. Proceeding with OCR.")
+        # Log URL after click and take screenshot
+        post_click_url = page.url
+        logger.info(f"Post-click URL: {post_click_url}")
+        save_screenshot(page, config, f"post_click_{target_label}")
+        logger.info("Performing OCR scan after click...")
+        run_ocr_after_action(page, config)
+        logger.info(f"OCR scan completed after clicking '{target_label}'.")
+    except Exception as e:
+        logger.exception(f"Failed to click label '{target_label}' or perform OCR: {e}")
+        raise

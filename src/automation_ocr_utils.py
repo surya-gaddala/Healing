@@ -178,6 +178,21 @@ def run_easyocr(image: np.ndarray, config) -> List[Dict]:
     logger.debug(f"EasyOCR found {len(results)} results meeting confidence.")
     return results
 
+def run_ocr_after_action(page: Page, config):
+    """Helper function to re-run OCR and update CSV."""
+    logger.info("Performing OCR scan after action...")
+    screenshot_path = save_screenshot(page, config, "post_action_scan")
+    if not screenshot_path:
+        raise Exception("Failed to save screenshot for OCR.")
+    processed_image = preprocess_image(config, screenshot_path)
+    if processed_image is None:
+        raise Exception("Image preprocessing failed.")
+    ocr_results = run_ocr(config, processed_image)
+    if not ocr_results:
+        logger.warning("Post-action OCR scan found no results.")
+    save_coordinates_csv(config, ocr_results)
+    return ocr_results
+
 def run_ocr(config, processed_image: np.ndarray) -> List[Dict]:
     if processed_image is None: return []
     engine = config.get('OCR', 'ocr_engine', fallback='combined').lower(); all_results = []
@@ -239,63 +254,182 @@ def normalize_text(text: str) -> str:
     """Normalize text for matching (lower, alphanumeric)."""
     return re.sub(r'[^a-z0-9]', '', text.lower().strip())
 
+# def find_element_by_label(config, target_label: str, ocr_results: List[Dict]) -> Optional[Dict]:
+#     """Find the best match for a label in OCR results using similarity."""
+#     if not ocr_results: return None
+#     norm_target = normalize_text(target_label)
+#     best_match = None
+#     best_score = 0.0
+#     match_threshold = config.getfloat('Matching', 'label_match_threshold', fallback=0.6)
+
+#     for result in ocr_results:
+#         norm_current = normalize_text(result['Label'])
+#         if not norm_current: continue # Skip empty labels after normalization
+
+#         # Use SequenceMatcher for similarity score
+#         similarity = difflib.SequenceMatcher(None, norm_target, norm_current).ratio()
+
+#         # Optional: Boost score slightly if one contains the other?
+#         # if norm_target in norm_current or norm_current in norm_target:
+#         #     similarity = min(1.0, similarity + 0.1) # Small boost
+
+#         if similarity > best_score:
+#             best_score = similarity
+#             best_match = result
+#             logger.debug(f"New best match candidate for '{target_label}': '{result['Label']}' score={similarity:.2f}")
+
+#     if best_match and best_score >= match_threshold:
+#         logger.info(f"Found best match for '{target_label}': '{best_match['Label']}' (Score: {best_score:.2f} >= Threshold: {match_threshold:.2f})")
+#         return best_match
+#     else:
+#         logger.warning(f"No suitable match found for '{target_label}'. Best score: {best_score:.2f} (Threshold: {match_threshold:.2f})")
+#         return None
+
 def find_element_by_label(config, target_label: str, ocr_results: List[Dict]) -> Optional[Dict]:
-    """Find the best match for a label in OCR results using similarity."""
-    if not ocr_results: return None
+    """Find the best match for a label in OCR results, prioritizing proximity to last action if duplicates exist."""
+    if not ocr_results:
+        return None
     norm_target = normalize_text(target_label)
-    best_match = None
-    best_score = 0.0
     match_threshold = config.getfloat('Matching', 'label_match_threshold', fallback=0.6)
+    candidates = []
 
     for result in ocr_results:
         norm_current = normalize_text(result['Label'])
-        if not norm_current: continue # Skip empty labels after normalization
-
-        # Use SequenceMatcher for similarity score
+        if not norm_current:
+            continue
         similarity = difflib.SequenceMatcher(None, norm_target, norm_current).ratio()
+        if similarity >= match_threshold:
+            distance = float('inf')
+            if hasattr(config, 'last_action_coords') and config.last_action_coords:
+                last_x, last_y = config.last_action_coords.get('X', 0), config.last_action_coords.get('Y', 0)
+                curr_x, curr_y = result['X'] + result['Width'] / 2, result['Y'] + result['Height'] / 2
+                distance = ((curr_x - last_x) ** 2 + (curr_y - last_y) ** 2) ** 0.5
+            candidates.append({
+                'result': result,
+                'similarity': similarity,
+                'distance': distance
+            })
+            logger.debug(f"Candidate for '{target_label}': '{result['Label']}' score={similarity:.2f}, distance={distance:.2f}")
 
-        # Optional: Boost score slightly if one contains the other?
-        # if norm_target in norm_current or norm_current in norm_target:
-        #     similarity = min(1.0, similarity + 0.1) # Small boost
-
-        if similarity > best_score:
-            best_score = similarity
-            best_match = result
-            logger.debug(f"New best match candidate for '{target_label}': '{result['Label']}' score={similarity:.2f}")
-
-    if best_match and best_score >= match_threshold:
-        logger.info(f"Found best match for '{target_label}': '{best_match['Label']}' (Score: {best_score:.2f} >= Threshold: {match_threshold:.2f})")
-        return best_match
-    else:
-        logger.warning(f"No suitable match found for '{target_label}'. Best score: {best_score:.2f} (Threshold: {match_threshold:.2f})")
+    if not candidates:
+        logger.warning(f"No suitable match found for '{target_label}'.")
         return None
 
+    best_candidate = sorted(candidates, key=lambda c: (-c['similarity'], c['distance']))[0]
+    best_match = best_candidate['result']
+    logger.info(f"Selected match for '{target_label}': '{best_match['Label']}' (Score: {best_candidate['similarity']:.2f}, Distance: {best_candidate['distance']:.2f})")
+    return best_match
 def calculate_click_coordinates(bbox: dict, element_type: str = 'button') -> Tuple[float, float]:
-    """Calculate center click point. Maybe adjust logic for 'field' later."""
     center_x = bbox['X'] + bbox['Width'] / 2
     center_y = bbox['Y'] + bbox['Height'] / 2
-    # Simple center click for now for both buttons and assumed field labels
-    # Add offset logic if needed, e.g., clicking below a field label
-    # if element_type == 'field': center_y += bbox['Height'] # Example: click below label
+    if element_type == 'button':
+        center_x += 30  # Move right to hit button
+        center_y += 10  # Move down slightly
+    elif element_type == 'field':
+        center_x += bbox['Width']  # Click to the right of label
     return center_x, center_y
 
-# --- Coordinate-Based Actions ---
-# (click_coordinates, fill_coordinates - Keep similar to previous versions)
+def scroll_to_coordinates(page: Page, bbox: dict):
+    """Scrolls the page to bring the specified coordinates into view."""
+    if not all(k in bbox for k in ['X', 'Y', 'Width', 'Height']):
+        raise ValueError("Invalid bbox for scrolling.")
+    try:
+        center_x = bbox['X'] + bbox['Width'] / 2
+        center_y = bbox['Y'] + bbox['Height'] / 2
+        logger.info(f"Scrolling to coordinates: x={center_x:.0f}, y={center_y:.0f}")
+        # Execute JavaScript to scroll the coordinates into view
+        page.evaluate(
+            "([x, y]) => window.scrollTo(x - window.innerWidth / 2, y - window.innerHeight / 2)",
+            [center_x, center_y]
+        )
+        page.wait_for_timeout(500)  # Brief pause to ensure scroll completes
+    except Exception as e:
+        logger.error(f"Failed to scroll to coordinates ({center_x:.0f}, {center_y:.0f}): {e}")
+        raise
 
 def click_coordinates(page: Page, bbox: dict):
-    if not all(k in bbox for k in ['X', 'Y', 'Width', 'Height']): raise ValueError("Invalid bbox for click.")
-    center_x, center_y = calculate_click_coordinates(bbox, 'button') # Assume button-like center click
-    try: logger.info(f"Clicking element via coordinates: x={center_x:.0f}, y={center_y:.0f}"); page.mouse.click(center_x, center_y, delay=50); page.wait_for_timeout(500)
-    except Exception as e: logger.error(f"Failed to click coordinates ({center_x:.0f}, {center_y:.0f}): {e}"); raise
-
-def fill_coordinates(page: Page, bbox: dict, value: str):
-    if not all(k in bbox for k in ['X', 'Y', 'Width', 'Height']): raise ValueError("Invalid bbox for fill.")
-    # Assume clicking the *label's* coordinates focuses the associated field nearby
-    # More advanced logic might find the label, then search nearby for an input field's coordinates
-    center_x, center_y = calculate_click_coordinates(bbox, 'field') # Assume field-like center click for focus
+    if not all(k in bbox for k in ['X', 'Y', 'Width', 'Height']):
+        raise ValueError("Invalid bbox for click.")
+    center_x, center_y = calculate_click_coordinates(bbox, 'button')
     try:
+        scroll_to_coordinates(page, bbox)
+        # Log OCR coordinates for debugging
+        logger.info(f"OCR bounding box for click: X={bbox['X']}, Y={bbox['Y']}, Width={bbox['Width']}, Height={bbox['Height']}")
+        logger.info(f"Clicking element via coordinates: x={center_x:.0f}, y={center_y:.0f}")
+        # Hover to activate element
+        page.mouse.move(center_x, center_y)
+        page.wait_for_timeout(100)
+        # Take screenshot before click
+        screenshot_path = save_screenshot(page, page.context.config, f"pre_click_button")
+        logger.info(f"Pre-click screenshot saved: {screenshot_path}")
+        # Try JavaScript click
+        clicked = page.evaluate(
+            """([x, y]) => {
+                const el = document.elementFromPoint(x, y);
+                if (el) {
+                    el.click();
+                    return {
+                        tag: el.tagName,
+                        id: el.id,
+                        classes: el.className,
+                        text: el.innerText.substring(0, 50)
+                    };
+                }
+                return null;
+            }""",
+            [center_x, center_y]
+        )
+        logger.info(f"JavaScript click result: {clicked}")
+        if not clicked:
+            logger.warning("No element found at click coordinates. Retrying with offset...")
+            # Retry with offset coordinates
+            offset_x, offset_y = center_x + 30, center_y + 15
+            clicked = page.evaluate(
+                """([x, y]) => {
+                    const el = document.elementFromPoint(x, y);
+                    if (el) {
+                        el.click();
+                        return {
+                            tag: el.tagName,
+                            id: el.id,
+                            classes: el.className,
+                            text: el.innerText.substring(0, 50)
+                        };
+                    }
+                    return null;
+                }""",
+                [offset_x, offset_y]
+            )
+            logger.info(f"Offset click result (x={offset_x}, y={offset_y}): {clicked}")
+        try:
+            page.wait_for_load_state('networkidle', timeout=10000)
+            current_url = page.url
+            if hasattr(page.context, 'last_url') and page.context.last_url != current_url:
+                logger.info("Detected page navigation. Re-running OCR...")
+                run_ocr_after_action(page, page.context.config)
+            page.context.last_url = current_url
+        except Exception as nav_e:
+            logger.debug(f"No navigation detected after click: {nav_e}")
+        page.wait_for_timeout(500)
+        page.context.last_action_coords = {'X': center_x, 'Y': center_y}
+    except Exception as e:
+        logger.error(f"Failed to click coordinates ({center_x:.0f}, {center_y:.0f}): {e}")
+        raise
+def fill_coordinates(page: Page, bbox: dict, value: str):
+    if not all(k in bbox for k in ['X', 'Y', 'Width', 'Height']):
+        raise ValueError("Invalid bbox for fill.")
+    center_x, center_y = calculate_click_coordinates(bbox, 'field')
+    try:
+        page.context.last_action_coords = {'X': center_x, 'Y': center_y}  # Set before action
+        scroll_to_coordinates(page, bbox)
         logger.info(f"Filling element via coordinates: x={center_x:.0f}, y={center_y:.0f}")
-        page.mouse.click(center_x, center_y, delay=50); page.wait_for_timeout(100)
-        page.keyboard.press("Control+A"); page.keyboard.press("Delete"); page.wait_for_timeout(50)
-        page.keyboard.type(str(value), delay=50); page.wait_for_timeout(500)
-    except Exception as e: logger.error(f"Failed to fill coordinates ({center_x:.0f}, {center_y:.0f}): {e}"); raise
+        page.mouse.click(center_x, center_y, delay=50)
+        page.wait_for_timeout(100)
+        page.keyboard.press("Control+A")
+        page.keyboard.press("Delete")
+        page.wait_for_timeout(50)
+        page.keyboard.type(str(value), delay=50)
+        page.wait_for_timeout(500)
+    except Exception as e:
+        logger.error(f"Failed to fill coordinates ({center_x:.0f}, {center_y:.0f}): {e}")
+        raise
